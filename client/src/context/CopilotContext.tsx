@@ -1,7 +1,7 @@
 import { ICopilotContext } from "@/types/copilot"
 import { createContext, ReactNode, useContext, useState } from "react"
 import toast from "react-hot-toast"
-import axiosInstance from "../api/pollinationsApi"
+import axiosInstance from "../api/copilotApi"
 
 const CopilotContext = createContext<ICopilotContext | null>(null)
 
@@ -30,25 +30,33 @@ const CopilotContextProvider = ({ children }: { children: ReactNode }) => {
 
             toast.loading("Generating code...")
             setIsRunning(true)
-            const response = await axiosInstance.post("/", {
+            const response = await axiosInstance.post("/api/copilot", {
                 messages: [
                     {
                         role: "system",
                         content:
-                            "You are a code generator copilot for project named Code Sync. Generate code based on the given prompt without any explanation. Return only the code, formatted in Markdown using the appropriate language syntax (e.g., js for JavaScript, py for Python). Do not include any additional text or explanations. If you don't know the answer, respond with 'I don't know'.",
+                            "You are a code generator copilot for project named Code Sync. Generate code based on given prompt without any explanation. Return only the code, formatted in Markdown using the appropriate language syntax (e.g., js for JavaScript, py for Python). Do not include any additional text or explanations. If you don't know the answer, respond with 'I don't know'.",
                     },
                     {
                         role: "user",
                         content: input,
                     },
                 ],
-                model: "mistral",
-                private: true,
+                model: "llama-3.3-70b-versatile",
             })
             if (response.data) {
                 toast.success("Code generated successfully")
-                const code = response.data
-                if (code) setOutput(code)
+                console.log("API Response:", response.data)
+                const content = response.data.choices?.[0]?.message?.content
+                if (content) {
+                    setOutput(content)
+                } else {
+                    console.error("No content found in response")
+                    toast.error("No content generated")
+                }
+            } else {
+                console.error("No response data received")
+                toast.error("No response received")
             }
             setIsRunning(false)
             toast.dismiss()

@@ -1,9 +1,9 @@
 import axios, { AxiosInstance } from "axios"
 
-const pistonBaseUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000"
+const copilotBaseUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000"
 
 const instance: AxiosInstance = axios.create({
-    baseURL: pistonBaseUrl,
+    baseURL: copilotBaseUrl,
     headers: {
         "Content-Type": "application/json",
     },

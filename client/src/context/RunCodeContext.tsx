@@ -38,7 +38,7 @@ const RunCodeContextProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         const fetchSupportedLanguages = async () => {
             try {
-                const languages = await axiosInstance.get("/runtimes")
+                const languages = await axiosInstance.get("/api/runtimes")
                 setSupportedLanguages(languages.data)
             } catch (error: any) {
                 toast.error("Failed to fetch supported languages")
@@ -78,7 +78,7 @@ const RunCodeContextProvider = ({ children }: { children: ReactNode }) => {
             setIsRunning(true)
             const { language, version } = selectedLanguage
 
-            const response = await axiosInstance.post("/execute", {
+            const response = await axiosInstance.post("/api/execute", {
                 language,
                 version,
                 files: [{ name: activeFile.name, content: activeFile.content }],

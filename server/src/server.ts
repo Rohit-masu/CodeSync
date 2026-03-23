@@ -6,6 +6,8 @@ import { SocketEvent, SocketId } from "./types/socket"
 import { USER_CONNECTION_STATUS, User } from "./types/user"
 import { Server } from "socket.io"
 import path from "path"
+import axios from "axios"
+import OpenAI from "openai"
 
 dotenv.config()
 
@@ -286,6 +288,98 @@ io.on("connection", (socket) => {
 })
 
 const PORT = process.env.PORT || 3000
+
+// Code execution endpoint
+app.post("/api/execute", async (req: Request, res: Response) => {
+	try {
+		const { language, version, files, stdin } = req.body
+		
+		if (!language || !version || !files || !Array.isArray(files)) {
+			return res.status(400).json({ 
+				error: "Missing required parameters: language, version, files" 
+			})
+		}
+
+		const pistonResponse = await axios.post("https://emkc.org/api/v2/piston/execute", {
+			language,
+			version,
+			files,
+			stdin: stdin || ""
+		})
+
+		res.json(pistonResponse.data)
+	} catch (error: any) {
+		console.error("Code execution error:", error)
+		res.status(500).json({ 
+			error: "Failed to execute code",
+			details: error?.response?.data || error?.message 
+		})
+	}
+})
+
+// Get supported languages endpoint
+app.get("/api/runtimes", async (req: Request, res: Response) => {
+	try {
+		const pistonResponse = await axios.get("https://emkc.org/api/v2/piston/runtimes")
+		res.json(pistonResponse.data)
+	} catch (error: any) {
+		console.error("Failed to fetch runtimes:", error)
+		res.status(500).json({ 
+			error: "Failed to fetch supported languages",
+			details: error?.response?.data || error?.message 
+		})
+	}
+})
+
+// Copilot API endpoint
+app.post("/api/copilot", async (req: Request, res: Response) => {
+	try {
+		const { messages, model } = req.body
+		
+		if (!messages || !Array.isArray(messages)) {
+			return res.status(400).json({ 
+				error: "Missing required parameter: messages" 
+			})
+		}
+
+		// Check if API key is available
+		const apiKey = process.env.GROQ_API_KEY
+		if (!apiKey) {
+			return res.status(500).json({ 
+				error: "GROQ_API_KEY not found in environment variables" 
+			})
+		}
+
+		// Initialize OpenAI client for Groq API
+		const openai = new OpenAI({
+			apiKey: apiKey,
+			baseURL: "https://api.groq.com/openai/v1"
+		})
+
+		const completion = await openai.chat.completions.create({
+			model: model || "llama-3.3-70b-versatile",
+			messages: messages,
+			max_tokens: 4000,
+			temperature: 0.7,
+		})
+
+		const response = {
+			choices: [{
+				message: {
+					content: completion.choices[0].message.content
+				}
+			}]
+		}
+
+		res.json(response)
+	} catch (error: any) {
+		console.error("Groq API error:", error)
+		res.status(500).json({ 
+			error: "Failed to generate code",
+			details: error?.response?.data || error?.message 
+		})
+	}
+})
 
 app.get("/", (req: Request, res: Response) => {
 	// Send the index.html file
