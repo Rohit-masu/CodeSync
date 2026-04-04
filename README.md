@@ -1,13 +1,6 @@
-![logo](https://github.com/rohitgupta/Code-Sync/assets/100127570/d1ff7f52-a692-4d51-b281-358aeab9156e)
+
 
 A collaborative, real-time code editor where users can seamlessly code together. It provides a platform for multiple users to enter a room, share a unique room ID, and collaborate on code simultaneously.
-
-![GitHub contributors](https://img.shields.io/github/contributors/rohitgupta/Code-Sync?style=for-the-badge&color=48bf21)
-![GitHub Repo stars](https://img.shields.io/github/stars/rohitgupta/Code-Sync?style=for-the-badge)
-![GitHub issues](https://img.shields.io/github/issues/rohitgupta/Code-Sync?style=for-the-badge&color=d7af2d)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/rohitgupta/Code-Sync?style=for-the-badge&color=f47373)
-![GitHub License](https://img.shields.io/github/license/rohitgupta/Code-Sync?style=for-the-badge&color=e67234)
-![Visitors](https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2Frohitgupta%2FCode-Sync&label=Repo%20Views&countColor=%2337d67a&labelStyle=upper)
 
 ## 🔮 Features
 
