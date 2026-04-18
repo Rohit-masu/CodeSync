@@ -33,6 +33,8 @@ enum SocketEvent {
 	REJECT_JOIN = "reject-join",
 	JOIN_REJECTED = "join-rejected",
 	KICKED = "kicked",
+	REQUEST_METRICS = "request-metrics",
+	USER_METRICS = "user-metrics",
 }
 
 interface SocketContext {

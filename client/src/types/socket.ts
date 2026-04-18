@@ -32,6 +32,8 @@ enum SocketEvent {
     SYNC_DRAWING = "sync-drawing",
     DRAWING_UPDATE = "drawing-update",
     KICKED = "kicked",
+    REQUEST_METRICS = "request-metrics",
+    USER_METRICS = "user-metrics",
 }
 
 interface SocketContext {

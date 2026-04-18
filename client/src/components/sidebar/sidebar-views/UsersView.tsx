@@ -7,13 +7,17 @@ import toast from "react-hot-toast"
 import { GoSignOut } from "react-icons/go"
 import { IoShareOutline } from "react-icons/io5"
 import { LuCopy } from "react-icons/lu"
+import { FaChartBar } from "react-icons/fa"
 import { useNavigate } from "react-router-dom"
+import { useState } from "react"
+import AnalyticsModal from "@/components/room/AnalyticsModal"
 
-function UsersView() {
+const UsersView = () => {
     const navigate = useNavigate()
     const { viewHeight } = useResponsive()
     const { setStatus } = useAppContext()
     const { socket } = useSocket()
+    const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false)
 
     const copyURL = async () => {
         const url = window.location.href
@@ -51,6 +55,14 @@ function UsersView() {
             {/* List of connected users */}
             <Users />
             <div className="flex flex-col items-center gap-4 pt-4">
+                <button
+                    className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-500/20 p-3 font-semibold text-blue-400 hover:bg-blue-500 hover:text-white transition-colors"
+                    onClick={() => setIsAnalyticsOpen(true)}
+                    title="View Analytics"
+                >
+                    <FaChartBar size={20} />
+                    View Analytics
+                </button>
                 <div className="flex w-full gap-4">
                     {/* Share URL button */}
                     <button
@@ -78,6 +90,11 @@ function UsersView() {
                     </button>
                 </div>
             </div>
+            
+            <AnalyticsModal 
+                isOpen={isAnalyticsOpen} 
+                onClose={() => setIsAnalyticsOpen(false)} 
+            />
         </div>
     )
 }

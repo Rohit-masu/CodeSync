@@ -9,10 +9,21 @@ interface RoomState {
 	createdAt: Date
 }
 
+export interface UserMetrics {
+	username: string
+	filesCreated: number
+	filesEdited: number
+	linesAdded: number
+	linesDeleted: number
+	totalEditTime: number
+	lastActivityAt: Date
+}
+
 class RoomStore {
 	private rooms: Map<string, RoomState> = new Map()
 	private userRoles: Map<string, Map<string, UserRole>> = new Map() // roomId -> username -> role
 	private socketIdToUsername: Map<string, Map<string, string>> = new Map() // roomId -> socketId -> username
+	private userMetrics: Map<string, Map<string, UserMetrics>> = new Map() // roomId -> username -> metrics
 
 	// ── Join / leave ──────────────────────────────────────────────────────────
 
@@ -189,6 +200,95 @@ class RoomStore {
 			username: socketIdToUsername?.get(socketId) || "Unknown",
 			role,
 		}))
+	}
+
+	// ── Analytics ─────────────────────────────────────────────────────────────
+
+	private initUserMetrics(roomId: string, username: string) {
+		if (!this.userMetrics.has(roomId)) {
+			this.userMetrics.set(roomId, new Map())
+		}
+		const roomMetrics = this.userMetrics.get(roomId)!
+		if (!roomMetrics.has(username)) {
+			roomMetrics.set(username, {
+				username,
+				filesCreated: 0,
+				filesEdited: 0,
+				linesAdded: 0,
+				linesDeleted: 0,
+				totalEditTime: 0,
+				lastActivityAt: new Date()
+			})
+		}
+	}
+
+	async updateMetrics(roomId: string, username: string, event: "FILE_CREATED" | "FILE_UPDATED" | "FILE_DELETED", data?: any) {
+		this.initUserMetrics(roomId, username)
+		const metrics = this.userMetrics.get(roomId)!.get(username)!
+		
+		const now = new Date()
+		const timeDiff = now.getTime() - metrics.lastActivityAt.getTime()
+		// Only count as active edit time if they were active in the last 5 minutes
+		if (timeDiff < 5 * 60 * 1000) {
+			metrics.totalEditTime += timeDiff
+		} else {
+			// Just a baseline for a single action after a long break
+			metrics.totalEditTime += 10 * 1000 // 10 seconds 
+		}
+		metrics.lastActivityAt = now
+
+		if (event === "FILE_CREATED") metrics.filesCreated++
+		if (event === "FILE_UPDATED") {
+			metrics.filesEdited++
+			if (data?.oldContent !== undefined && data?.newContent !== undefined) {
+				const oldLines = data.oldContent.split('\n').length
+				const newLines = data.newContent.split('\n').length
+				const diff = newLines - oldLines
+				if (diff > 0) metrics.linesAdded += diff
+				else if (diff < 0) metrics.linesDeleted += Math.abs(diff)
+			}
+		}
+	}
+
+	async getAnalytics(roomId: string) {
+		const metricsMap = this.userMetrics.get(roomId)
+		const users = metricsMap ? Array.from(metricsMap.values()) : []
+
+		// Calculate project estimate
+		const fileTree = await this.getFileTree(roomId)
+		let totalLOC = 0
+		let fileCount = 0
+		let maxNestedLevel = 0
+
+		fileTree.forEach(node => {
+			if (node.type === 'file') {
+				fileCount++
+				totalLOC += (node.content || "").split('\n').length
+			}
+		})
+
+		const room = this.rooms.get(roomId)
+		const hoursSinceCreation = room ? (Date.now() - room.createdAt.getTime()) / (1000 * 60 * 60) : 1
+		const effectiveHours = Math.max(hoursSinceCreation, 0.5) // minimum 30 mins
+
+		let totalLinesAdded = 0
+		users.forEach(u => totalLinesAdded += u.linesAdded)
+
+		const avgVelocity = totalLinesAdded > 0 ? (totalLinesAdded / effectiveHours) : 50 // default 50 loc/hr
+		const complexityFactor = 0.8 + (fileCount / 100)
+		
+		const estimationHours = (totalLOC / avgVelocity) * complexityFactor
+
+		return {
+			users,
+			projectEstimate: {
+				totalLOC,
+				fileCount,
+				avgVelocity: Math.round(avgVelocity),
+				complexityFactor: complexityFactor.toFixed(2),
+				estimationHours: Math.round(estimationHours * 10) / 10
+			}
+		}
 	}
 
 	// ── Role management ───────────────────────────────────────────────────────

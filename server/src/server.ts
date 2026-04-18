@@ -15,6 +15,7 @@ import { getUsersInRoom, getRoomId, getUserBySocketId } from "./utils/helper"
 import { withWritePermission, withHostPermission, verifyToken } from "./middleware/auth"
 import { UserModel } from "./models/User"
 import { RoomModel } from "./models/Room"
+import { FileNodeModel } from "./models/FileNode"
 import authRoutes from "./routes/auth"
 import roomRoutes from "./routes/room"
 import avatarRoutes from "./routes/avatar"
@@ -351,7 +352,7 @@ io.on("connection", (socket) => {
 		})
 	})
 
-	socket.on(SocketEvent.FILE_CREATED, ({ parentDirId, newFile }: { parentDirId: string; newFile: unknown }) => {
+	socket.on(SocketEvent.FILE_CREATED, async ({ parentDirId, newFile }: { parentDirId: string; newFile: unknown }) => {
 		const roomId = getRoomId(userSocketMap, socket.id)
 		if (!roomId) return
 		withWritePermission(socket, roomId, async () => {
@@ -366,14 +367,22 @@ io.on("connection", (socket) => {
 					language: (newFile as any).language || 'plaintext'
 				})
 			}
+			const authUser = (socket as any).authUser
+			await roomStore.updateMetrics(roomId, authUser.username, "FILE_CREATED")
 		})
 	})
 
-	socket.on(SocketEvent.FILE_UPDATED, ({ fileId, newContent }: { fileId: string; newContent: string }) => {
+	socket.on(SocketEvent.FILE_UPDATED, async ({ fileId, newContent }: { fileId: string; newContent: string }) => {
 		const roomId = getRoomId(userSocketMap, socket.id)
 		if (!roomId) return
 		withWritePermission(socket, roomId, async () => {
 			socket.broadcast.to(roomId).emit(SocketEvent.FILE_UPDATED, { fileId, newContent })
+			
+			const authUser = (socket as any).authUser
+			const oldNode = await FileNodeModel.findOne({ roomId, nodeId: fileId })
+			const oldContent = oldNode?.content || ""
+			await roomStore.updateMetrics(roomId, authUser.username, "FILE_UPDATED", { oldContent, newContent })
+
 			await roomStore.upsertFileNode(roomId, fileId, { content: newContent })
 		})
 	})
@@ -393,10 +402,19 @@ io.on("connection", (socket) => {
 		withWritePermission(socket, roomId, async () => {
 			socket.broadcast.to(roomId).emit(SocketEvent.FILE_DELETED, { fileId })
 			await roomStore.deleteFileNode(roomId, fileId)
+			const authUser = (socket as any).authUser
+			await roomStore.updateMetrics(roomId, authUser.username, "FILE_DELETED")
 		})
 	})
 
 	// ── User status ───────────────────────────────────────────────────────────
+
+	socket.on(SocketEvent.REQUEST_METRICS, async () => {
+		const roomId = getRoomId(userSocketMap, socket.id)
+		if (!roomId) return
+		const analytics = await roomStore.getAnalytics(roomId)
+		socket.emit(SocketEvent.USER_METRICS, analytics)
+	})
 
 	socket.on(SocketEvent.USER_OFFLINE, ({ socketId }: { socketId: string }) => {
 		userSocketMap = userSocketMap.map((user: User) =>
