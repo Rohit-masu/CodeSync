@@ -1,18 +1,21 @@
+import { UserRole } from "./auth"
+
 enum USER_CONNECTION_STATUS {
 	OFFLINE = "offline",
-	ONLINE = "online",
+	ONLINE  = "online",
 }
 
 interface User {
-	username: string
-	roomId: string
-	status: USER_CONNECTION_STATUS
+	username:       string
+	roomId:         string
+	role:           UserRole
+	status:         USER_CONNECTION_STATUS
 	cursorPosition: number
-	typing: boolean
-	currentFile: string | null
-	socketId: string
+	typing:         boolean
+	currentFile:    string | null
+	socketId:       string
 	selectionStart?: number
-	selectionEnd?: number
+	selectionEnd?:   number
 }
 
 export { USER_CONNECTION_STATUS, User }

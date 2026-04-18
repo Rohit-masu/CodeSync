@@ -132,7 +132,7 @@ Special thanks to:
   <tbody>
     <tr>
       <td align="center" valign="top">
-        <img src="https://github.com/rohitgupta.png" width="120px;" alt="Rohit Gupta"/>
+        <img src="" width="120px;" alt="Rohit Gupta"/>
         <br />
         <b>Rohit Gupta</b>
       </td>

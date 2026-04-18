@@ -9,10 +9,10 @@ function useUserActivity() {
     const { socket } = useSocket()
 
     const handleUserVisibilityChange = useCallback(() => {
-        if (document.visibilityState === "visible")
+        // Disabled emitting USER_OFFLINE on visibility hidden 
+        // to prevent users from appearing offline when switching tabs
+        if (document.visibilityState === "visible") {
             socket.emit(SocketEvent.USER_ONLINE, { socketId: socket.id })
-        else if (document.visibilityState === "hidden") {
-            socket.emit(SocketEvent.USER_OFFLINE, { socketId: socket.id })
         }
     }, [socket])
 

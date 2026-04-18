@@ -28,6 +28,7 @@ const RunCodeContextProvider = ({ children }: { children: ReactNode }) => {
     const [input, setInput] = useState<string>("")
     const [output, setOutput] = useState<string>("")
     const [isRunning, setIsRunning] = useState<boolean>(false)
+    const [isLoadingLanguages, setIsLoadingLanguages] = useState<boolean>(true)
     const [supportedLanguages, setSupportedLanguages] = useState<Language[]>([])
     const [selectedLanguage, setSelectedLanguage] = useState<Language>({
         language: "",
@@ -37,11 +38,15 @@ const RunCodeContextProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         const fetchSupportedLanguages = async () => {
+            if (!isLoadingLanguages) return
+            
             try {
                 const languages = await axiosInstance.get("/api/runtimes")
                 setSupportedLanguages(languages.data)
+                setIsLoadingLanguages(false)
             } catch (error: any) {
                 toast.error("Failed to fetch supported languages")
+                setIsLoadingLanguages(false)
                 if (error?.response?.data) console.error(error?.response?.data)
             }
         }
@@ -51,19 +56,19 @@ const RunCodeContextProvider = ({ children }: { children: ReactNode }) => {
 
     // Set the selected language based on the file extension
     useEffect(() => {
-        if (supportedLanguages.length === 0 || !activeFile?.name) return
+        if (isLoadingLanguages || supportedLanguages.length === 0 || !activeFile?.name) return
 
         const extension = activeFile.name.split(".").pop()
         if (extension) {
             const languageName = langMap.languages(extension)
             const language = supportedLanguages.find(
-                (lang) =>
+                (lang: Language) =>
                     lang.aliases.includes(extension) ||
                     languageName.includes(lang.language.toLowerCase()),
             )
             if (language) setSelectedLanguage(language)
         } else setSelectedLanguage({ language: "", version: "", aliases: [] })
-    }, [activeFile?.name, supportedLanguages])
+    }, [activeFile?.name, isLoadingLanguages])
 
     const runCode = async () => {
         try {

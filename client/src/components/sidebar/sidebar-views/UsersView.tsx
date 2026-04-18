@@ -44,6 +44,7 @@ function UsersView() {
         })
     }
 
+    
     return (
         <div className="flex flex-col p-4" style={{ height: viewHeight }}>
             <h1 className="view-title">Users</h1>

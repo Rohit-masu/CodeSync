@@ -1,3 +1,4 @@
+// Socket.ts
 import { Socket } from "socket.io"
 
 type SocketId = string
@@ -27,6 +28,11 @@ enum SocketEvent {
 	REQUEST_DRAWING = "request-drawing",
 	SYNC_DRAWING = "sync-drawing",
 	DRAWING_UPDATE = "drawing-update",
+	JOIN_REQUEST_PENDING = "join-request-pending",
+	APPROVE_JOIN = "approve-join",
+	REJECT_JOIN = "reject-join",
+	JOIN_REJECTED = "join-rejected",
+	KICKED = "kicked",
 }
 
 interface SocketContext {

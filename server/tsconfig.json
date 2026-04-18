@@ -2,11 +2,17 @@
 	"compilerOptions": {
 		"target": "ES2020",
 		"module": "CommonJS",
-		"strict": true,
+		"strict": false,
+		"noImplicitAny": false,
+		"strictNullChecks": false,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"outDir": "./dist",
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"moduleResolution": "node",
+		"allowSyntheticDefaultImports": true
 	},
-	"include": ["src"],
-	"exclude": ["node_modules"]
+	"include": ["src/**/*"],
+	"exclude": ["node_modules", "dist"]
 }

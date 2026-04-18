@@ -23,7 +23,20 @@ function useFullScreen() {
         if (!isMobile) return
 
         if (screenfull.isEnabled) {
-            screenfull.request()
+            // Only request fullscreen if there's a user interaction
+            // Add click handler to request fullscreen on first user click
+            const handleFirstClick = () => {
+                try {
+                    screenfull.request().catch(err => {
+                        console.log('Fullscreen request failed:', err)
+                    })
+                    document.removeEventListener('click', handleFirstClick)
+                } catch (error) {
+                    console.log('Fullscreen error:', error)
+                }
+            }
+            
+            document.addEventListener('click', handleFirstClick, { once: true })
         }
     }, [isMobile])
 }

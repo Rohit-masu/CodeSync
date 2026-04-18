@@ -3,9 +3,14 @@ enum USER_CONNECTION_STATUS {
     ONLINE = "online",
 }
 
+export type UserRole = 'HOST' | 'EDITOR' | 'VIEWER'
+
 interface User {
     username: string
     roomId: string
+    role: UserRole
+    avatar?: string
+    socketId?: string
 }
 
 interface RemoteUser extends User {
@@ -13,7 +18,6 @@ interface RemoteUser extends User {
     cursorPosition: number
     typing: boolean
     currentFile: string
-    socketId: string
     selectionStart?: number
     selectionEnd?: number
 }
@@ -27,4 +31,25 @@ enum USER_STATUS {
     DISCONNECTED = "disconnected",
 }
 
-export { USER_CONNECTION_STATUS, USER_STATUS, RemoteUser, User }
+// ─── Auth types (new) ─────────────────────────────────────────────────────────
+interface AuthUser {
+    id: string
+    username: string
+    email: string
+    avatar: string | null
+}
+
+interface PendingUser {
+    socketId: string
+    username: string
+    avatar: string | null
+}
+
+export {
+    USER_CONNECTION_STATUS,
+    USER_STATUS,
+    RemoteUser,
+    User,
+    AuthUser,
+    PendingUser,
+}

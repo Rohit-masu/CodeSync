@@ -20,7 +20,7 @@ function EditorComponent() {
 
     return (
         <main
-            className={cn("flex w-full flex-col overflow-x-auto md:h-screen", {
+            className={cn("flex w-full flex-col overflow-hidden md:h-screen", {
                 "h-[calc(100vh-50px)]": !minHeightReached,
                 "h-full": minHeightReached,
             })}

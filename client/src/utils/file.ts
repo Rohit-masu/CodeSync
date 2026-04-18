@@ -7,18 +7,59 @@ const initialCode = `function sayHi() {
 
 sayHi()`
 
+// Helper to rebuild tree from flat array
+export function buildFileStructureFromArray(nodes: any[]) {
+  if (!nodes || nodes.length === 0) {
+      return initialFileStructure
+  }
+
+  const nodeMap = new Map()
+  // Map nodeId to id for frontend FileSystemItem compatibility
+  nodes.forEach(n => nodeMap.set(n.nodeId, { ...n, id: n.nodeId, children: [] }))
+  
+  // Find the root node. In the DB, the root node might have parentId: null
+  let root = Array.from(nodeMap.values()).find(n => n.parentId === null)
+  
+  // Fallback if no explicit root is found
+  if (!root && nodeMap.has("root-id")) {
+      root = nodeMap.get("root-id")
+  }
+  
+  // If still no root, create a dummy root and attach top-level items
+  if (!root) {
+      root = {
+          id: "root-id",
+          name: "root",
+          type: "directory",
+          children: []
+      }
+      nodeMap.set("root-id", root)
+  }
+
+  nodes.forEach(n => {
+    if (n.parentId && nodeMap.has(n.parentId)) {
+      nodeMap.get(n.parentId).children.push(nodeMap.get(n.nodeId))
+    } else if (n.nodeId !== root.id) {
+      // If it has no parent and isn't the root itself, attach to root
+      root.children.push(nodeMap.get(n.nodeId))
+    }
+  })
+  
+  return root
+}
+
 export const initialFileStructure: FileSystemItem = {
-    name: "root",
-    id: uuidv4(),
-    type: "directory",
-    children: [
-        {
-            id: uuidv4(),
-            type: "file",
-            name: "index.js",
-            content: initialCode,
-        },
-    ],
+  name: "root",
+  id: "root-id",
+  type: "directory",
+  children: [
+    {
+      id: "initial-file-id",
+      type: "file",
+      name: "index.js",
+      content: initialCode,
+    },
+  ],
 }
 
 export const findParentDirectory = (
