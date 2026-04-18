@@ -368,7 +368,12 @@ io.on("connection", (socket) => {
 				})
 			}
 			const authUser = (socket as any).authUser
-			await roomStore.updateMetrics(roomId, authUser.username, "FILE_CREATED")
+			if (newFile && typeof newFile === 'object' && 'id' in newFile) {
+				await roomStore.updateMetrics(roomId, authUser.username, "FILE_CREATED", { 
+					fileId: (newFile as any).id, 
+					content: (newFile as any).content || '' 
+				})
+			}
 		})
 	})
 
@@ -379,9 +384,8 @@ io.on("connection", (socket) => {
 			socket.broadcast.to(roomId).emit(SocketEvent.FILE_UPDATED, { fileId, newContent })
 			
 			const authUser = (socket as any).authUser
-			const oldNode = await FileNodeModel.findOne({ roomId, nodeId: fileId })
-			const oldContent = oldNode?.content || ""
-			await roomStore.updateMetrics(roomId, authUser.username, "FILE_UPDATED", { oldContent, newContent })
+			// Calculate analytics using our fast memory cache in roomStore
+			await roomStore.updateMetrics(roomId, authUser.username, "FILE_UPDATED", { fileId, newContent })
 
 			await roomStore.upsertFileNode(roomId, fileId, { content: newContent })
 		})
@@ -403,7 +407,7 @@ io.on("connection", (socket) => {
 			socket.broadcast.to(roomId).emit(SocketEvent.FILE_DELETED, { fileId })
 			await roomStore.deleteFileNode(roomId, fileId)
 			const authUser = (socket as any).authUser
-			await roomStore.updateMetrics(roomId, authUser.username, "FILE_DELETED")
+			await roomStore.updateMetrics(roomId, authUser.username, "FILE_DELETED", { fileId })
 		})
 	})
 

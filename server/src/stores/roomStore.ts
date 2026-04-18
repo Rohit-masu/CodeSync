@@ -12,7 +12,7 @@ interface RoomState {
 export interface UserMetrics {
 	username: string
 	filesCreated: number
-	filesEdited: number
+	filesEditedIds: Set<string>
 	linesAdded: number
 	linesDeleted: number
 	totalEditTime: number
@@ -24,6 +24,7 @@ class RoomStore {
 	private userRoles: Map<string, Map<string, UserRole>> = new Map() // roomId -> username -> role
 	private socketIdToUsername: Map<string, Map<string, string>> = new Map() // roomId -> socketId -> username
 	private userMetrics: Map<string, Map<string, UserMetrics>> = new Map() // roomId -> username -> metrics
+	private fileLinesCache: Map<string, Map<string, number>> = new Map() // roomId -> fileId -> lineCount
 
 	// ── Join / leave ──────────────────────────────────────────────────────────
 
@@ -213,18 +214,22 @@ class RoomStore {
 			roomMetrics.set(username, {
 				username,
 				filesCreated: 0,
-				filesEdited: 0,
+				filesEditedIds: new Set(),
 				linesAdded: 0,
 				linesDeleted: 0,
 				totalEditTime: 0,
 				lastActivityAt: new Date()
 			})
 		}
+		if (!this.fileLinesCache.has(roomId)) {
+			this.fileLinesCache.set(roomId, new Map())
+		}
 	}
 
 	async updateMetrics(roomId: string, username: string, event: "FILE_CREATED" | "FILE_UPDATED" | "FILE_DELETED", data?: any) {
 		this.initUserMetrics(roomId, username)
 		const metrics = this.userMetrics.get(roomId)!.get(username)!
+		const roomFileLines = this.fileLinesCache.get(roomId)!
 		
 		const now = new Date()
 		const timeDiff = now.getTime() - metrics.lastActivityAt.getTime()
@@ -237,22 +242,53 @@ class RoomStore {
 		}
 		metrics.lastActivityAt = now
 
-		if (event === "FILE_CREATED") metrics.filesCreated++
-		if (event === "FILE_UPDATED") {
-			metrics.filesEdited++
-			if (data?.oldContent !== undefined && data?.newContent !== undefined) {
-				const oldLines = data.oldContent.split('\n').length
+		if (event === "FILE_CREATED") {
+			metrics.filesCreated++
+			if (data?.fileId && data?.content !== undefined) {
+				roomFileLines.set(data.fileId, data.content.split('\n').length)
+			}
+		}
+		if (event === "FILE_UPDATED" && data?.fileId) {
+			metrics.filesEditedIds.add(data.fileId)
+			if (data?.newContent !== undefined) {
 				const newLines = data.newContent.split('\n').length
-				const diff = newLines - oldLines
-				if (diff > 0) metrics.linesAdded += diff
-				else if (diff < 0) metrics.linesDeleted += Math.abs(diff)
+				const oldLines = roomFileLines.get(data.fileId)
+				
+				// If we have seen this file before, calculate diff
+				if (oldLines !== undefined) {
+					const diff = newLines - oldLines
+					if (diff > 0) metrics.linesAdded += diff
+					else if (diff < 0) metrics.linesDeleted += Math.abs(diff)
+				} else {
+					// Fallback if not seen, but shouldn't happen unless joined mid-session without full sync
+					roomFileLines.set(data.fileId, newLines)
+				}
+				
+				// Update cache for next time
+				roomFileLines.set(data.fileId, newLines)
+			}
+		}
+		if (event === "FILE_DELETED" && data?.fileId) {
+			const lines = roomFileLines.get(data.fileId)
+			if (lines !== undefined) {
+				metrics.linesDeleted += lines
+				roomFileLines.delete(data.fileId)
 			}
 		}
 	}
 
 	async getAnalytics(roomId: string) {
 		const metricsMap = this.userMetrics.get(roomId)
-		const users = metricsMap ? Array.from(metricsMap.values()) : []
+		// Transform to expected frontend format
+		const users = metricsMap ? Array.from(metricsMap.values()).map(u => ({
+			username: u.username,
+			filesCreated: u.filesCreated,
+			filesEdited: u.filesEditedIds.size,
+			linesAdded: u.linesAdded,
+			linesDeleted: u.linesDeleted,
+			totalEditTime: u.totalEditTime,
+			lastActivityAt: u.lastActivityAt
+		})) : []
 
 		// Calculate project estimate
 		const fileTree = await this.getFileTree(roomId)

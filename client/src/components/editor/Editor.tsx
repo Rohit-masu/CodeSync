@@ -46,6 +46,12 @@ function Editor() {
 
     const onCodeChange = (code: string, view: ViewUpdate) => {
         if (!activeFile) return
+        
+        // Prevent infinite loops from programmatic updates (socket syncs)
+        // If the code is the same as the activeFile's content in this render, it means
+        // this change was triggered by the prop updating, not by the user typing.
+        if (code === activeFile.content) return
+
         // canWrite check here is a safety net; real prevention is EditorState.readOnly below
         if (!canWrite) return
 
