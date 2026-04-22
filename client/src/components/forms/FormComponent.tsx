@@ -107,7 +107,8 @@ const FormComponent = () => {
     useEffect(() => {
         console.log("Status changed:", status, "currentUser:", currentUser)
         
-        if (status === USER_STATUS.DISCONNECTED && !socket.connected) {
+        // Don't auto-reconnect if user is on home page (intentionally logged out)
+        if (status === USER_STATUS.DISCONNECTED && !socket.connected && window.location.pathname === '/') {
             socket.connect()
             return
         }

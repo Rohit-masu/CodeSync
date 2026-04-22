@@ -16,7 +16,7 @@ export interface IFileNode {
 
 const FileNodeSchema = new Schema({
 	roomId: { type: String, required: true, index: true },
-	nodeId: { type: String, required: true, unique: true },
+	nodeId: { type: String, required: true },
 	name: { type: String, required: true, trim: true, maxlength: 255 },
 	type: { type: String, enum: ["file", "directory"], required: true },
 	parentId: { type: String, default: null },

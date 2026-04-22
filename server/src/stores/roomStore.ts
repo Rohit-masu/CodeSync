@@ -104,19 +104,25 @@ class RoomStore {
 		}
 
 		if (room.permissions.size === 0) {
-			this.rooms.delete(roomId)
-			this.socketIdToUsername.delete(roomId)
-			this.userRoles.delete(roomId)
-			
-			// Backend Cleanup: Delete room and associated files from DB when inactive
-			try {
-				await RoomModel.deleteOne({ roomId })
-				await FileNodeModel.deleteMany({ roomId })
-				await MessageModel.deleteMany({ roomId })
-				console.log(`[CLEANUP] Room ${roomId} inactive. Deleted room, files, and messages.`)
-			} catch (err) {
-				console.error(`[CLEANUP ERROR] Failed to clean up room ${roomId}:`, err)
-			}
+			// Add delay before cleanup to prevent immediate deletion during rejoin
+			setTimeout(async () => {
+				const currentRoom = this.rooms.get(roomId)
+				if (currentRoom && currentRoom.permissions.size === 0) {
+					this.rooms.delete(roomId)
+					this.socketIdToUsername.delete(roomId)
+					this.userRoles.delete(roomId)
+					
+					// Backend Cleanup: Delete room and associated files from DB when inactive
+					try {
+						await RoomModel.deleteOne({ roomId })
+						await FileNodeModel.deleteMany({ roomId })
+						await MessageModel.deleteMany({ roomId })
+						console.log(`[CLEANUP] Room ${roomId} inactive. Deleted room, files, and messages.`)
+					} catch (err) {
+						console.error(`[CLEANUP ERROR] Failed to clean up room ${roomId}:`, err)
+					}
+				}
+			}, 30000) // Wait 30 seconds before cleanup
 			
 			return null
 		}
@@ -553,15 +559,27 @@ class RoomStore {
 			content?: string
 			language?: string
 			lastEditedBy?: string
-		}
+		},
+		retryCount = 0
 	): Promise<void> {
 		try {
+			// Generate unique nodeId if it's the initial file
+			const uniqueNodeId = nodeId === 'initial-file-id' 
+				? `${roomId}-initial-file-${Date.now()}` 
+				: nodeId
+			
 			await FileNodeModel.findOneAndUpdate(
-				{ roomId, nodeId },
+				{ roomId, nodeId: uniqueNodeId },
 				{ $set: { ...data, lastEditedAt: new Date() } },
-				{ upsert: true }
+				{ upsert: true, new: true }
 			)
-		} catch (err) {
+		} catch (err: any) {
+			// Catch MongoDB duplicate key error (E11000) which can happen with concurrent upserts
+			if (err.code === 11000 && retryCount < 3) {
+				console.warn(`RoomStore.upsertFileNode concurrent upsert conflict for ${nodeId}, retrying...`)
+				await new Promise(resolve => setTimeout(resolve, 50 * (retryCount + 1)))
+				return this.upsertFileNode(roomId, nodeId, data, retryCount + 1)
+			}
 			console.error("RoomStore.upsertFileNode error:", err)
 		}
 	}

@@ -2,7 +2,7 @@ import Users from "@/components/common/Users"
 import { useAppContext } from "@/context/AppContext"
 import { useSocket } from "@/context/SocketContext"
 import useResponsive from "@/hooks/useResponsive"
-import { USER_STATUS } from "@/types/user"
+import { USER_STATUS, UserRole } from "@/types/user"
 import toast from "react-hot-toast"
 import { GoSignOut } from "react-icons/go"
 import { IoShareOutline } from "react-icons/io5"
@@ -15,7 +15,7 @@ import AnalyticsModal from "@/components/room/AnalyticsModal"
 const UsersView = () => {
     const navigate = useNavigate()
     const { viewHeight } = useResponsive()
-    const { setStatus } = useAppContext()
+    const { setStatus, setCurrentUser } = useAppContext()
     const { socket } = useSocket()
     const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false)
 
@@ -41,8 +41,17 @@ const UsersView = () => {
     }
 
     const leaveRoom = () => {
+        // Prevent auto-reconnection
+        socket.io.opts.autoConnect = false
         socket.disconnect()
         setStatus(USER_STATUS.DISCONNECTED)
+        // Clear current user to prevent rejoin
+        setCurrentUser({
+            username: "",
+            roomId: "",
+            role: "VIEWER" as UserRole,
+            socketId: "",
+        })
         navigate("/", {
             replace: true,
         })

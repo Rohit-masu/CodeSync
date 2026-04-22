@@ -19,6 +19,7 @@ import { FileNodeModel } from "./models/FileNode"
 import authRoutes from "./routes/auth"
 import roomRoutes from "./routes/room"
 import avatarRoutes from "./routes/avatar"
+import aiRoutes from "./routes/ai"
 
 dotenv.config()
 
@@ -31,6 +32,7 @@ app.use(express.static(path.join(__dirname, "public")))
 app.use("/api/auth", authRoutes)
 app.use("/api/rooms", roomRoutes)
 app.use("/api/avatar", avatarRoutes)
+app.use("/api/ai", aiRoutes)
 
 const server = http.createServer(app)
 const io = new Server(server, {
@@ -618,7 +620,166 @@ async function _admitUser(
 // ─── REST endpoints ───────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000
-const PISTON_URL = process.env.PISTON_URL || "http://localhost:2000"
+const PISTON_URL = process.env.PISTON_URL || "https://emkc.org/api/v2/piston"
+// Alternative: Judge0 API (free alternative)
+const JUDGE0_URL = process.env.JUDGE0_URL || "https://api.judge0.com/cebin/v1"
+// Local execution fallback
+import { exec, spawn } from 'child_process'
+import { promisify } from 'util'
+import * as fs from 'fs'
+import * as os from 'os'
+
+const execAsync = promisify(exec)
+
+// Local code execution function
+async function executeCodeLocally(language: string, code: string, stdin: string): Promise<any> {
+	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codesync-'))
+	const filePath = path.join(tempDir, `temp.${getFileExtension(language)}`)
+	
+	try {
+		// Write code to temporary file
+		fs.writeFileSync(filePath, code)
+
+		let command: string
+		let args: string[] = []
+
+		// Configure command based on language
+		switch (language.toLowerCase()) {
+			case 'javascript':
+			case 'js':
+				command = 'node'
+				args = [filePath]
+				break
+			case 'python':
+			case 'py':
+				command = 'python'
+				args = [filePath]
+				break
+			case 'java':
+				command = 'java'
+				// Compile and run Java
+				const classPath = path.join(tempDir, 'Temp')
+				const javaFile = path.join(tempDir, 'Temp.java')
+				fs.writeFileSync(javaFile, code.replace(/public class \w+/, 'public class Temp'))
+				await execAsync(`javac "${javaFile}" -d "${tempDir}"`)
+				command = 'java'
+				args = ['-cp', tempDir, 'Temp']
+				break
+			case 'cpp':
+			case 'c++':
+				const exePath = path.join(tempDir, 'temp')
+				await execAsync(`g++ "${filePath}" -o "${exePath}"`)
+				command = exePath
+				args = []
+				break
+			case 'c':
+				const cExePath = path.join(tempDir, 'temp')
+				await execAsync(`gcc "${filePath}" -o "${cExePath}"`)
+				command = cExePath
+				args = []
+				break
+			case 'typescript':
+			case 'ts':
+				command = 'ts-node'
+				args = [filePath]
+				break
+			default:
+				throw new Error(`Language ${language} not supported for local execution`)
+		}
+
+		// Execute the code
+		let stdout = ''
+		let stderr = ''
+		
+		const child = spawn(command, args, {
+			cwd: tempDir,
+			timeout: 5000, // 5 second timeout
+		})
+
+		// Handle stdin input
+		if (stdin) {
+			child.stdin?.write(stdin)
+			child.stdin?.end()
+		}
+
+		// Collect output
+		child.stdout?.on('data', (data) => {
+			stdout += data.toString()
+		})
+
+		child.stderr?.on('data', (data) => {
+			stderr += data.toString()
+		})
+
+		// Wait for completion
+		await new Promise((resolve, reject) => {
+			child.on('close', resolve)
+			child.on('error', reject)
+		})
+
+		return {
+			run: {
+				stdout: stdout || "",
+				stderr: stderr || "",
+				output: Buffer.from(stdout || "").toString('base64'),
+				code: 0,
+				signal: null,
+				exit_code: 0,
+				time: 0,
+				memory: 0,
+			},
+			language: language,
+			version: "1.0.0",
+		}
+	} catch (error: any) {
+		console.error("Local execution error:", {
+			language,
+			error: error.message,
+			code: error.code,
+			signal: error.signal,
+			stdout: error.stdout,
+			stderr: error.stderr
+		})
+		
+		return {
+			run: {
+				stdout: error.stdout || "",
+				stderr: error.stderr || error.message || "",
+				output: Buffer.from(error.stdout || "").toString('base64'),
+				code: 1,
+				signal: null,
+				exit_code: error.code || 1,
+				time: 0,
+				memory: 0,
+			},
+			language: language,
+			version: "1.0.0",
+		}
+	} finally {
+		// Clean up temporary files
+		try {
+			fs.rmSync(tempDir, { recursive: true, force: true })
+		} catch (cleanupError) {
+			console.warn("Failed to clean up temp directory:", cleanupError)
+		}
+	}
+}
+
+function getFileExtension(language: string): string {
+	const extensions: { [key: string]: string } = {
+		'javascript': 'js',
+		'js': 'js',
+		'python': 'py',
+		'py': 'py',
+		'java': 'java',
+		'cpp': 'cpp',
+		'c++': 'cpp',
+		'c': 'c',
+		'typescript': 'ts',
+		'ts': 'ts',
+	}
+	return extensions[language.toLowerCase()] || 'txt'
+}
 
 app.post("/api/execute", async (req: Request, res: Response) => {
 	try {
@@ -626,24 +787,136 @@ app.post("/api/execute", async (req: Request, res: Response) => {
 		if (!language || !version || !files || !Array.isArray(files)) {
 			return res.status(400).json({ error: "Missing required parameters: language, version, files" })
 		}
-		// Now this becomes: https://emkc.org/api/v2/piston/execute
-		const pistonResponse = await axios.post(`${PISTON_URL}/execute`, {
-			language, version, files, stdin: stdin || "",
-		})
-		res.json(pistonResponse.data)
+
+		// Try Piston API first
+		try {
+			const executeUrl = PISTON_URL.includes("emkc.org") ? `${PISTON_URL}/execute` : `${PISTON_URL}/api/v2/execute`
+			const pistonResponse = await axios.post(executeUrl, {
+				language, version, files, stdin: stdin || "",
+			})
+			res.json(pistonResponse.data)
+			return
+		} catch (pistonError: any) {
+			console.warn("Piston API failed, trying Judge0 fallback:", pistonError?.response?.data?.message || pistonError.message)
+			
+			// Try Judge0 API second
+			try {
+				const judge0Language = mapLanguageToJudge0(language)
+				if (!judge0Language) {
+					throw new Error(`Language ${language} not supported by Judge0 fallback`)
+				}
+
+				const sourceCode = files[0]?.content || ""
+				const judge0Response = await axios.post(`${JUDGE0_URL}/submissions?base64_encoded=true&wait=true`, {
+					source_code: Buffer.from(sourceCode).toString('base64'),
+					language_id: judge0Language,
+					stdin: stdin ? Buffer.from(stdin).toString('base64') : "",
+				})
+
+				// Transform Judge0 response to match Piston format
+				const result = {
+					run: {
+						output: Buffer.from(judge0Response.data.stdout || "").toString('base64'),
+						stderr: Buffer.from(judge0Response.data.stderr || "").toString('base64'),
+						code: judge0Response.data.status_id,
+						signal: null,
+						// Convert Judge0 status to Piston format
+						exit_code: judge0Response.data.exit_code || 0,
+						time: judge0Response.data.time || 0,
+						memory: judge0Response.data.memory || 0,
+					},
+					language: language,
+					version: version,
+				}
+
+				res.json(result)
+				return
+			} catch (judge0Error: any) {
+				console.warn("Judge0 API failed, using local execution fallback:", judge0Error.message)
+				
+				// Final fallback: Local execution
+				try {
+					const sourceCode = files[0]?.content || ""
+					console.log("Attempting local execution for language:", language)
+					const localResult = await executeCodeLocally(language, sourceCode, stdin || "")
+					console.log("Local execution successful")
+					res.json(localResult)
+				} catch (localError: any) {
+					console.error("Local execution also failed:", localError)
+					res.status(500).json({ 
+						error: "All code execution methods failed", 
+						details: {
+							piston: pistonError?.response?.data?.message || pistonError.message,
+							judge0: judge0Error.message,
+							local: localError.message
+						}
+					})
+				}
+			}
+		}
 	} catch (error: any) {
 		console.error("Code execution error:", error)
 		res.status(500).json({ error: "Failed to execute code", details: error?.response?.data || error?.message })
 	}
 })
 
+// Helper function to map Piston languages to Judge0 language IDs
+function mapLanguageToJudge0(language: string): number | null {
+	const languageMap: { [key: string]: number } = {
+		'javascript': 63,
+		'python': 71,
+		'java': 62,
+		'cpp': 54,
+		'c': 50,
+		'csharp': 51,
+		'php': 68,
+		'ruby': 72,
+		'go': 79,
+		'rust': 73,
+		'typescript': 63, // Use JavaScript for TypeScript
+		'sql': 82,
+		'html': 0, // Not supported by Judge0
+		'css': 0, // Not supported by Judge0
+		'json': 0, // Not supported by Judge0
+	}
+	return languageMap[language.toLowerCase()] || null
+}
+
 app.get("/api/runtimes", async (_req: Request, res: Response) => {
 	try {
-		// Now this becomes: https://emkc.org/api/v2/piston/runtimes
-		const pistonResponse = await axios.get(`${PISTON_URL}/runtimes`)
-		res.json(pistonResponse.data)
+		console.log("Fetching runtimes from:", PISTON_URL)
+		// Try Piston API first
+		try {
+			const runtimesUrl = PISTON_URL.includes("emkc.org") ? `${PISTON_URL}/runtimes` : `${PISTON_URL}/api/v2/runtimes`
+			console.log("Runtimes URL:", runtimesUrl)
+			const pistonResponse = await axios.get(runtimesUrl)
+			console.log("Runtimes response:", pistonResponse.data)
+			res.json(pistonResponse.data)
+			return
+		} catch (pistonError: any) {
+			console.warn("Piston runtimes failed, using Judge0 fallback:", pistonError?.response?.data?.message || pistonError.message)
+			
+			// Fallback to Judge0 languages
+			const judge0Response = await axios.get(`${JUDGE0_URL}/languages`)
+			
+			// Transform Judge0 languages to match Piston format
+			const runtimes = judge0Response.data.map((lang: any) => ({
+				name: lang.name,
+				language: lang.name.toLowerCase(),
+				version: lang.version || "1.0.0",
+				aliases: [lang.name.toLowerCase()],
+			}))
+
+			res.json(runtimes)
+		}
 	} catch (error: any) {
 		console.error("Failed to fetch runtimes:", error)
+		console.error("Error details:", {
+			status: error?.response?.status,
+			statusText: error?.response?.statusText,
+			data: error?.response?.data,
+			message: error?.message
+		})
 		res.status(500).json({ error: "Failed to fetch supported languages", details: error?.response?.data || error?.message })
 	}
 })

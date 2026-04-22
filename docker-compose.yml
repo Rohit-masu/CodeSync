@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  piston:
+    image: ghcr.io/engineer-man/piston
+    ports:
+      - "2000:2000"
+    restart: always
+    environment:
+      - PISTON_DISABLE_NETWORKING=false
+    volumes:
+      - piston-packages:/piston/packages
+
+volumes:
+  piston-packages:
