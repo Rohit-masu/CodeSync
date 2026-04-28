@@ -20,20 +20,20 @@ function ChatInput() {
         const inputVal = inputRef.current?.value.trim()
 
         if (inputVal && inputVal.length > 0) {
+            const isoTimestamp = new Date().toISOString()
             const message = {
                 id: uuidV4(),
                 content: inputVal,
                 username: currentUser.username,
-                timestamp: formatDate(new Date().toISOString()),
+                timestamp: isoTimestamp,
             }
             socket.emit(SocketEvent.SEND_MESSAGE, { message })
             
-            // Map back to ChatMessage format for local state
             const localMessage: ChatMessage = {
                 id: message.id,
                 message: message.content,
                 username: message.username,
-                timestamp: message.timestamp,
+                timestamp: formatDate(isoTimestamp),
             }
             setMessages((messages) => [...messages, localMessage])
 

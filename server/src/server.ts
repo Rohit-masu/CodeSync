@@ -2,6 +2,7 @@ import express, { Response, Request } from "express"
 import dotenv from "dotenv"
 import http from "http"
 import cors from "cors"
+import passport from "passport"
 import { SocketEvent } from "./types/socket"
 import { USER_CONNECTION_STATUS, User } from "./types/user"
 import { UserRole } from "./types/auth"
@@ -28,8 +29,12 @@ app.use(express.json())
 app.use(cors())
 app.use(express.static(path.join(__dirname, "public")))
 
+// Initialize Passport
+app.use(passport.initialize())
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes)
+app.use("/auth", authRoutes) // For Google OAuth redirects
 app.use("/api/rooms", roomRoutes)
 app.use("/api/avatar", avatarRoutes)
 app.use("/api/ai", aiRoutes)

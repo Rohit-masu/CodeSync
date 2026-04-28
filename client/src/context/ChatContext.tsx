@@ -1,5 +1,6 @@
 import { ChatContext as ChatContextType, ChatMessage } from "@/types/chat"
 import { SocketEvent } from "@/types/socket"
+import { formatDate } from "@/utils/formateDate"
 import {
     ReactNode,
     createContext,
@@ -25,18 +26,20 @@ function ChatContextProvider({ children }: { children: ReactNode }) {
     const [isNewMessage, setIsNewMessage] = useState<boolean>(false)
     const [lastScrollHeight, setLastScrollHeight] = useState<number>(0)
 
+    const toChatMessage = (message: any): ChatMessage => ({
+        id: message.id || Math.random().toString(),
+        message: message.content || message.message || "",
+        username: message.username || "Unknown",
+        timestamp: formatDate(
+            message.timestamp || message.createdAt || new Date().toISOString(),
+        ),
+    })
+
     useEffect(() => {
         socket.on(
             SocketEvent.RECEIVE_MESSAGE,
             ({ message }: { message: any }) => {
-                const formattedMessage: ChatMessage = {
-                    id: message.id || Math.random().toString(),
-                    message: message.content || message.message || "",
-                    username: message.username || "Unknown",
-                    timestamp: message.timestamp 
-                        ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                }
+                const formattedMessage = toChatMessage(message)
                 setMessages((messages) => [...messages, formattedMessage])
                 setIsNewMessage(true)
             },
@@ -44,13 +47,7 @@ function ChatContextProvider({ children }: { children: ReactNode }) {
         
         socket.on(SocketEvent.JOIN_ACCEPTED, ({ recentMessages }: { recentMessages: any[] }) => {
             if (recentMessages && Array.isArray(recentMessages)) {
-                // Map the server messages to ChatMessage format if needed
-                const formattedMessages = recentMessages.map((m: any) => ({
-                    id: m.id || Math.random().toString(),
-                    message: m.content || m.message || "",
-                    username: m.username || "Unknown",
-                    timestamp: new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                }))
+                const formattedMessages = recentMessages.map(toChatMessage)
                 setMessages(formattedMessages)
             }
         })

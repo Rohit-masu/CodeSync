@@ -1,5 +1,16 @@
 export function formatDate(timestamp: string) {
+    if (!timestamp) {
+        return new Date().toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+        })
+    }
+
     const date = new Date(timestamp)
+
+    if (Number.isNaN(date.getTime())) {
+        return timestamp
+    }
 
     // Get hours and minutes
     let hours = date.getHours()

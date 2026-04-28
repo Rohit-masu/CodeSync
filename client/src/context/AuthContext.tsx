@@ -23,6 +23,7 @@ interface AuthContextType {
     updatePassword: (currentPassword: string, newPassword: string) => Promise<void>
     uploadAvatar: (file: File) => Promise<void>
     deleteAvatar: () => Promise<void>
+    completeOAuth: (oauthToken: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -152,6 +153,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAuthUser((prev) => (prev ? { ...prev, avatar: null } : prev))
     }
 
+    const completeOAuth = async (oauthToken: string) => {
+        localStorage.setItem("token", oauthToken)
+        const res = await axios.get(`${BACKEND_URL}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${oauthToken}` },
+        })
+        setToken(oauthToken)
+        setAuthUser(res.data)
+    }
+
     return (
         <AuthContext.Provider
             value={{
@@ -166,6 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 updatePassword,
                 uploadAvatar,
                 deleteAvatar,
+                completeOAuth,
             }}
         >
             {children}

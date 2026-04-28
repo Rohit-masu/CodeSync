@@ -7,6 +7,7 @@ import HomePage from "./pages/HomePage"
 import LoginPage from "./pages/LoginPage"
 import RegisterPage from "./pages/RegisterPage"
 import ProfilePage from "./pages/ProfilePage"
+import OAuthSuccessPage from "./pages/OAuthSuccessPage"
 
 const App = () => {
     return (
@@ -16,6 +17,7 @@ const App = () => {
                     {/* Public routes */}
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
+                    <Route path="/auth/success" element={<OAuthSuccessPage />} />
 
                     {/* Semi-protected — shows auth status but accessible */}
                     <Route path="/" element={<HomePage />} />
