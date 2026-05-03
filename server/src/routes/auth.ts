@@ -1,5 +1,6 @@
 import { Request, Response, Router } from "express"
 import bcrypt from "bcryptjs"
+import crypto from "crypto"
 import passport from "passport"
 import { Strategy as GoogleStrategy } from "passport-google-oauth20"
 import { signToken, requireAuth, JwtPayload } from "../middleware/auth"
@@ -7,6 +8,27 @@ import { UserModel } from "../models/User"
 import { UserRole } from "../types/auth"
 
 const router = Router()
+
+const getFrontendUrl = () => process.env.CLIENT_URL || "http://localhost:5173"
+
+const redirectToLogin = (res: Response, error: string) =>
+    res.redirect(`${getFrontendUrl()}/login?error=${encodeURIComponent(error)}`)
+
+const buildGoogleUsername = async (email: string) => {
+    const baseUsername = email
+        .split("@")[0]
+        .replace(/[^a-zA-Z0-9_-]/g, "")
+        .slice(0, 40) || "google-user"
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const suffix = Math.floor(1000 + Math.random() * 9000)
+        const username = `${baseUsername}${suffix}`.slice(0, 50)
+        const existingUser = await UserModel.findOne({ username })
+        if (!existingUser) return username
+    }
+
+    return `google-${crypto.randomUUID().replace(/-/g, "").slice(0, 43)}`
+}
 
 router.post("/register", async (req: Request, res: Response) => {
     try {
@@ -244,7 +266,12 @@ if (hasGoogleOAuthConfig) {
             },
             async (_accessToken, _refreshToken, profile, done) => {
                 try {
-                    let user = await UserModel.findOne({ email: profile.emails?.[0]?.value })
+                    const email = profile.emails?.[0]?.value
+                    if (!email) {
+                        return done(new Error("Google account did not provide an email address"), undefined)
+                    }
+
+                    let user = await UserModel.findOne({ email })
 
                     if (user) {
                         if (!user.get("avatar") && profile.photos?.[0]?.value) {
@@ -255,12 +282,13 @@ if (hasGoogleOAuthConfig) {
                         return done(null, user)
                     }
 
-                    const username =
-                        profile.emails?.[0]?.value?.split("@")[0] + Math.floor(Math.random() * 1000)
+                    const username = await buildGoogleUsername(email)
+                    const passwordHash = await bcrypt.hash(crypto.randomUUID(), 10)
 
                     user = await UserModel.create({
                         username,
-                        email: profile.emails?.[0]?.value,
+                        email,
+                        passwordHash,
                         avatar: profile.photos?.[0]?.value || null,
                     })
 
@@ -281,15 +309,30 @@ if (hasGoogleOAuthConfig) {
 
     router.get(
         "/google/callback",
-        passport.authenticate("google", {
-            session: false,
-            failureRedirect: "/login?error=google_auth_failed",
-        }),
+        (req: Request, res: Response, next) => {
+            passport.authenticate(
+                "google",
+                { session: false },
+                (err: unknown, user: Express.User | false | null) => {
+                    if (err) {
+                        console.error("Google OAuth authentication error:", err)
+                        return redirectToLogin(res, "google_auth_failed")
+                    }
+
+                    if (!user) {
+                        return redirectToLogin(res, "google_auth_failed")
+                    }
+
+                    req.user = user
+                    return next()
+                },
+            )(req, res, next)
+        },
         async (req: Request, res: Response) => {
             try {
                 const user = req.user as any
                 if (!user) {
-                    return res.redirect("/login?error=user_not_found")
+                    return redirectToLogin(res, "user_not_found")
                 }
 
                 const token = signToken({
@@ -297,13 +340,13 @@ if (hasGoogleOAuthConfig) {
                     role: user.get("role") as UserRole,
                 })
 
-                const frontendUrl = process.env.CLIENT_URL || "http://localhost:5173"
+                const frontendUrl = getFrontendUrl()
                 return res.redirect(
                     `${frontendUrl}/auth/success?token=${token}&username=${user.get("username")}`,
                 )
             } catch (error: any) {
                 console.error("Google OAuth callback error:", error)
-                return res.redirect("/login?error=auth_failed")
+                return redirectToLogin(res, "auth_failed")
             }
         },
     )
@@ -316,7 +359,7 @@ if (hasGoogleOAuthConfig) {
     })
 
     router.get("/google/callback", (_req: Request, res: Response) => {
-        return res.redirect("/login?error=google_oauth_not_configured")
+        return redirectToLogin(res, "google_oauth_not_configured")
     })
 }
 
